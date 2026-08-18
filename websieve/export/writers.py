@@ -21,6 +21,8 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
+from .. import __version__
+
 
 class JsonlShardWriter:
     """Write records to gzipped JSONL shards of a bounded size.
@@ -118,6 +120,7 @@ class JsonlShardWriter:
             "shard_count": len(self._shards),
             "shard_size": self.shard_size,
             "shards": self._shards,
+            "websieve_version": __version__,
         }
         if self._shards or self.out_dir.exists():
             self.out_dir.mkdir(parents=True, exist_ok=True)
@@ -225,6 +228,7 @@ class ParquetShardWriter:
             "shard_count": len(self._shards),
             "shard_size": self.shard_size,
             "shards": self._shards,
+            "websieve_version": __version__,
         }
         self.out_dir.mkdir(parents=True, exist_ok=True)
         (self.out_dir / "manifest.json").write_text(

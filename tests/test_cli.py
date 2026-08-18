@@ -1,9 +1,11 @@
+import importlib.metadata
 import json
 import subprocess
 import sys
 
 import pytest
 
+from websieve import __version__
 from websieve.cli import main
 
 PROSE = (
@@ -316,6 +318,98 @@ def test_dedup_extracts_html_before_hashing(tmp_path, capsys):
     src = write_input(tmp_path, [HTML_DOC, {"url": "https://example.com/b", "text": plain}])
     main(["dedup", src])
     assert "DUPLICATE_OF" in capsys.readouterr().out
+
+
+def test_version_matches_installed_metadata():
+    """websieve.__version__ must match the installed package metadata."""
+    installed = importlib.metadata.version("websieve")
+    assert __version__ == installed
+
+
+def test_version_flag_works(capsys):
+    """websieve --version prints the version and exits cleanly."""
+    with pytest.raises(SystemExit) as exc:
+        main(["--version"])
+    assert exc.value.code == 0
+    out = capsys.readouterr().out.strip()
+    assert out.startswith("websieve")
+    assert __version__ in out
+
+
+def test_build_subcommand_version_flag_works(capsys):
+    with pytest.raises(SystemExit) as exc:
+        main(["build", "--version"])
+    assert exc.value.code == 0
+    out = capsys.readouterr().out.strip()
+    assert __version__ in out
+
+
+def test_assess_subcommand_version_flag_works(capsys):
+    with pytest.raises(SystemExit) as exc:
+        main(["assess", "--version"])
+    assert exc.value.code == 0
+    out = capsys.readouterr().out.strip()
+    assert __version__ in out
+
+
+def test_dedup_subcommand_version_flag_works(capsys):
+    with pytest.raises(SystemExit) as exc:
+        main(["dedup", "--version"])
+    assert exc.value.code == 0
+    out = capsys.readouterr().out.strip()
+    assert __version__ in out
+
+
+def test_extract_subcommand_version_flag_works(capsys):
+    with pytest.raises(SystemExit) as exc:
+        main(["extract", "--version"])
+    assert exc.value.code == 0
+    out = capsys.readouterr().out.strip()
+    assert __version__ in out
+
+
+def test_stats_json_records_websieve_version(tmp_path):
+    """build output stats.json must include websieve_version."""
+    src = write_input(tmp_path, [{"url": "u1", "text": PROSE}])
+    out = tmp_path / "ds"
+    main(["build", src, "-o", str(out)])
+    report = json.loads((out / "stats.json").read_text())
+    assert report["websieve_version"] == __version__
+
+
+def test_manifest_json_records_websieve_version(tmp_path):
+    """build output manifest.json must include websieve_version."""
+    src = write_input(tmp_path, [{"url": "u1", "text": PROSE}])
+    out = tmp_path / "ds"
+    main(["build", src, "-o", str(out)])
+    manifest = json.loads((out / "manifest.json").read_text())
+    assert manifest["websieve_version"] == __version__
+
+
+def test_importing_websieve_survives_missing_distribution_metadata(monkeypatch):
+    """A source checkout that was never installed must still import.
+    `importlib.metadata.version` raises `PackageNotFoundError` when no
+    distribution is installed, which happens for a plain clone, a vendored
+    copy, or a PYTHONPATH import. Without the guard in `websieve/__init__.py`
+    that exception escapes at import time and takes down every module below it,
+    which is a steep price for a version string.
+    """
+    import importlib
+
+    import websieve
+
+    def _raise(_name):
+        raise importlib.metadata.PackageNotFoundError("websieve")
+
+    monkeypatch.setattr(importlib.metadata, "version", _raise)
+    reloaded = importlib.reload(websieve)
+    try:
+        assert reloaded.__version__ == "0+unknown"
+    finally:
+        # Other tests compare __version__ against the real installed metadata,
+        # so the sentinel must not outlive this test.
+        monkeypatch.undo()
+        importlib.reload(websieve)
 
 
 # --------------------------------------------------------------------------

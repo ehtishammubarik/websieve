@@ -36,10 +36,13 @@ are the Gopher and C4 heuristics, reimplemented rather than vendored so every
 threshold can be read and changed. The right values genuinely differ between
 general web text and a domain corpus.
 
-**Where it stops.** Below roughly ten million documents, one process with no
-dependencies is the right trade. Above that it is the wrong one, and the honest
-answer is HuggingFace's `datatrove`. Growing into a distributed system would
-mean losing the property that makes this worth having.
+**Where it stops.** Memory, not elapsed time, is the binding constraint for the
+in-process dedup indexes. The [reproducible benchmark](docs/benchmarks.md)
+measured linear growth of about 10.8 MiB per 1,000 input documents on its
+controlled corpus, enough to fill a 16 GiB machine at roughly 1.5 million
+documents. The exact wall depends on the corpus and settings; past it, the
+honest answer is sharding or HuggingFace's `datatrove`. Growing into a
+distributed system would mean losing the property that makes this worth having.
 
 ## Now (0.1.x)
 
@@ -58,6 +61,8 @@ Shipped, tested, and on PyPI.
 | **`--strict` and `--max-malformed N`** | opt-in exit codes; the default still counts and continues ([#31]) |
 | **`--version` and `websieve.__version__`** | recorded into `manifest.json` and `stats.json` ([#32]) |
 | **Non-object JSON lines warned, not fatal** | `[1,2,3]`, `"x"`, `42`, `true`, `null` ([#33]) |
+| **Fragmented short-body extraction** | dominant sidebars no longer suppress runs of short semantic paragraphs ([#39]) |
+| **Reproducible performance benchmark** | stage throughput, dedup accuracy, and peak RSS with pinned input and machine-readable results ([#38]) |
 
 ## Next (0.2)
 
@@ -69,7 +74,6 @@ that most affect whether this survives contact with production work.
 | [Resumable runs](https://github.com/ehtishammubarik/websieve/issues/2) | A crash 8 hours into a 12-hour job currently means starting over |
 | [Progress reporting](https://github.com/ehtishammubarik/websieve/issues/3) | `build` is silent until it finishes, which is unpleasant at corpus scale and indistinguishable from a hang |
 | [Persistent dedup index](https://github.com/ehtishammubarik/websieve/issues/5) | Deduplicate a second crawl against the first instead of re-reading both |
-| [Extraction loses short blocks](https://github.com/ehtishammubarik/websieve/issues/8) | A correctness bug on pages built from many small paragraphs |
 | [Release pipeline does not test the artifact](https://github.com/ehtishammubarik/websieve/issues/11) | It tests the source tree, so a packaging break ships |
 | [`websieve report`](https://github.com/ehtishammubarik/websieve/issues/12) | An HTML corpus report you can hand to someone who will not read `stats.json` |
 | [Dataset card](https://github.com/ehtishammubarik/websieve/issues/13) | Publishing a dataset without one is how provenance gets lost |
@@ -90,7 +94,6 @@ and none of it blocks 0.2.
 | [Near-duplicate detection across chunks](https://github.com/ehtishammubarik/websieve/issues/21) | Not just whole documents |
 | [Streaming from S3 and GCS](https://github.com/ehtishammubarik/websieve/issues/7) | Read a crawl without staging it locally |
 | [HuggingFace Hub publishing](https://github.com/ehtishammubarik/websieve/issues/17) | Straight from `build` |
-| [Benchmark suite](https://github.com/ehtishammubarik/websieve/issues/6) | So throughput claims are reproducible rather than asserted |
 | [`websieve doctor`](https://github.com/ehtishammubarik/websieve/issues/18) | Recommend thresholds instead of making people guess |
 
 ## Not planned
@@ -99,7 +102,9 @@ Saying no is part of a roadmap.
 
 - **A crawler.** Scrapy exists and is good. `websieve` starts where it ends.
 - **Distributed execution.** If you need a cluster, use HuggingFace's
-  `datatrove`. Running in one process with no dependencies is the point here.
+  `datatrove`. Running in one process with no dependencies is the point here,
+  and the [benchmark](docs/benchmarks.md) makes its throughput and memory wall
+  measurable on representative input.
 - **A plugin system.** Composition and subclassing already cover the real cases.
   See [`docs/extending.md`](docs/extending.md).
 - **Dependencies in the core.** Permanent. CI enforces it.
@@ -143,3 +148,5 @@ build it twice.
 [#32]: https://github.com/ehtishammubarik/websieve/pull/32
 [#33]: https://github.com/ehtishammubarik/websieve/pull/33
 [#34]: https://github.com/ehtishammubarik/websieve/issues/34
+[#38]: https://github.com/ehtishammubarik/websieve/pull/38
+[#39]: https://github.com/ehtishammubarik/websieve/pull/39

@@ -16,6 +16,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   [#27](https://github.com/ehtishammubarik/websieve/pull/27). Closes
   [#23](https://github.com/ehtishammubarik/websieve/issues/23).
 
+### Fixed
+
+- **A JSON line that is valid but is not an object no longer crashes the run**
+  ([#28](https://github.com/ehtishammubarik/websieve/issues/28)). `[1,2,3]`,
+  `"x"`, `42`, `true`, and `null` all parse cleanly and none is a record.
+  `Document.from_dict` assumed a dict, so each raised `AttributeError` from
+  inside a comprehension, which `_read_docs` did not catch: one bad line from a
+  writer hiccup killed an hours-long `build`, `assess`, or `dedup`. They are now
+  warned, skipped, and counted as `malformed`, so the arithmetic still closes
+  and `--strict` still catches them. `from_dict` raises a `TypeError` naming
+  what it received rather than an `AttributeError` naming its own internals.
+
 ## [0.1.1] - 2026-07-28
 
 ### Added

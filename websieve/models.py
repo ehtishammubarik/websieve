@@ -63,6 +63,13 @@ class Document:
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> Document:
+        # A JSONL line can parse cleanly and still not be a record: `[1,2,3]`,
+        # `"x"`, `42`, `true`, and `null` are all valid JSON. Without this
+        # check the next line raises AttributeError from inside a
+        # comprehension, naming `.items` rather than the actual problem, and
+        # callers cannot distinguish it from a genuine bug in here.
+        if not isinstance(d, dict):
+            raise TypeError(f"expected a JSON object, got {type(d).__name__}")
         known = set(cls.__dataclass_fields__)
         return cls(**{k: v for k, v in d.items() if k in known})
 

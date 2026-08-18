@@ -39,6 +39,7 @@ class PipelineStats:
     dropped_exact_dup: int = 0
     dropped_quality: int = 0
     dropped_near_dup: int = 0
+    malformed: int = 0
     quality_failures: dict[str, int] = field(default_factory=dict)
 
     @property
@@ -59,6 +60,7 @@ class PipelineStats:
             "seen": self.seen,
             "kept": self.kept,
             "dropped": self.dropped,
+            "malformed": self.malformed,
             "keep_rate": round(self.keep_rate, 4),
             "dropped_by_stage": {
                 "empty": self.dropped_empty,
@@ -74,6 +76,7 @@ class PipelineStats:
             f"seen        {self.seen}",
             f"kept        {self.kept}  ({self.keep_rate:.1%})",
             f"dropped     {self.dropped}",
+            f"malformed   {self.malformed}",
             f"  empty            {self.dropped_empty}",
             f"  exact duplicate  {self.dropped_exact_dup}",
             f"  quality          {self.dropped_quality}",
@@ -139,6 +142,9 @@ class Pipeline:
         """Run every document through the pipeline, yielding survivors."""
         cfg = self.config
         for doc in docs:
+            # `seen` is also incremented in the CLI read layer for malformed
+            # lines (cli._read_docs); only successfully-parsed Documents reach
+            # here, so there is no double-count.
             self.stats.seen += 1
 
             prepare(doc, cfg)

@@ -2,7 +2,7 @@ import json
 
 from websieve.export.writers import JsonlShardWriter, read_shards
 from websieve.models import Document
-from websieve.pipeline import Pipeline, PipelineConfig
+from websieve.pipeline import Pipeline, PipelineConfig, PipelineStats
 
 PROSE = (
     "Kubernetes schedules GPU workloads through the NVIDIA device plugin. "
@@ -103,7 +103,19 @@ def test_stats_serialize():
     d = p.stats.to_dict()
     assert d["seen"] == 1 and d["kept"] == 1
     assert "dropped_by_stage" in d
+    assert "malformed" in d
+    assert d["malformed"] == 0
     json.dumps(d)  # must be serializable
+
+
+def test_stats_arithmetic_includes_malformed():
+    # malformed is a peer of dropped, not a sub-bucket, so the totals close:
+    # seen == kept + dropped + malformed
+    s = PipelineStats(seen=5, kept=2, dropped_empty=1, malformed=2)
+    d = s.to_dict()
+    assert d["malformed"] == 2
+    assert d["seen"] == d["kept"] + d["dropped"] + d["malformed"]
+    assert "malformed" in s.render()
 
 
 def test_roundtrip_through_shards(tmp_path):

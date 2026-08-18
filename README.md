@@ -290,3 +290,10 @@ crawl and a dataset you would actually train on.
 ## License
 
 MIT. See [LICENSE](LICENSE).
+
+---
+
+If `websieve` saved you an afternoon, a star helps the next person find it.
+Contributions welcome: [`good first issue`](https://github.com/ehtishammubarik/websieve/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)
+is pre-scoped, and [CONTRIBUTING.md](CONTRIBUTING.md) says how to claim one so
+two people do not build it twice.

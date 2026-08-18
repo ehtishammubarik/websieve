@@ -11,6 +11,32 @@ paragraph agreeing on the approach is cheaper than a review of the wrong
 implementation. Issues labelled `good first issue` are pre-scoped and safe to
 pick up without asking.
 
+**Say on the issue that you are taking it, before you write code.** One comment
+is enough. Two people have already built the same feature four hours apart
+because nothing marked the issue as claimed, and one of them had their work
+closed. That is a waste this project caused, and this line is how it stops.
+If an issue has a recent claim on it, pick another one or ask the claimer
+whether they want help.
+
+If you claim something and then drop it, say so. Nobody minds, and it frees the
+issue for the next person.
+
+**One issue per pull request.** Exactly one `Closes #N`, or `Refs #N` if you are
+only doing part of it. A PR closing several issues cannot be reviewed, reverted,
+or released per issue: reverting one fix drags the others out with it, and a
+reviewer has to hold several unrelated arguments at once, which is how a bad
+change gets waved through alongside two good ones.
+
+Finding a second defect while working on the first is normal and welcome. File
+it as its own issue, finish what you claimed, then open the next PR. Do not
+widen the branch in flight, even when the two share a root cause. A common cause
+is an argument for a common explanation, not a common commit.
+
+**A note on CI.** If this is your first contribution here, GitHub holds your
+workflow runs until a maintainer approves them. Until that happens the checks
+show as "no checks reported", which looks like a pass and is not one. Ping the
+PR if it sits unapproved.
+
 ## Setup
 
 ```bash
@@ -108,6 +134,14 @@ your bot honestly. `.claude/skills/crawl-ethics/SKILL.md` has the details.
 `websieve` filters for corpus *quality*, not legal *permissibility*. It does no
 PII removal and no licence detection. Do not add documentation implying
 otherwise.
+
+## If this is useful to you
+
+Star the repo. It is the main way anyone else finds this, and a project that
+looks unused gets treated as unmaintained regardless of the state of its tests.
+
+Entirely optional, and it has nothing to do with whether your PR gets merged.
+Code is reviewed on the code.
 
 ## Questions
 

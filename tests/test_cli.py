@@ -52,7 +52,152 @@ def test_malformed_line_is_skipped_not_fatal(tmp_path):
     p.write_text('{"url":"u1","text":"' + PROSE + '"}\nNOT JSON\n', encoding="utf-8")
     out = tmp_path / "ds"
     assert main(["build", str(p), "-o", str(out)]) == 0
-    assert json.loads((out / "stats.json").read_text())["stats"]["seen"] == 1
+    stats = json.loads((out / "stats.json").read_text())["stats"]
+    assert stats["seen"] == 2
+    assert stats["malformed"] == 1
+    assert stats["kept"] == 1
+    assert stats["seen"] == stats["kept"] + stats["dropped"] + stats["malformed"]
+
+
+def test_clean_file_has_no_malformed(tmp_path):
+    src = write_input(
+        tmp_path,
+        [
+            {"url": "u1", "text": PROSE},
+            {"url": "u2", "text": PROSE + " variant."},
+            {"url": "u3", "text": PROSE + " another variant."},
+        ],
+    )
+    out = tmp_path / "ds"
+    assert main(["build", src, "-o", str(out)]) == 0
+    stats = json.loads((out / "stats.json").read_text())["stats"]
+    assert stats["malformed"] == 0
+    assert stats["seen"] == stats["kept"] + stats["dropped"] + stats["malformed"]
+
+
+def test_scattered_bad_lines_are_all_counted(tmp_path):
+    p = tmp_path / "in.jsonl"
+    good = '{"url":"u1","text":"' + PROSE + '"}'
+    p.write_text(
+        good + "\nBROKEN ONE\n" + good + "\nBROKEN TWO\n" + good + "\n",
+        encoding="utf-8",
+    )
+    out = tmp_path / "ds"
+    assert main(["build", str(p), "-o", str(out)]) == 0
+    stats = json.loads((out / "stats.json").read_text())["stats"]
+    assert stats["seen"] == 5
+    assert stats["malformed"] == 2
+    assert stats["seen"] == stats["kept"] + stats["dropped"] + stats["malformed"]
+
+
+def test_truncated_line_is_counted_as_malformed(tmp_path):
+    p = tmp_path / "in.jsonl"
+    p.write_text(
+        '{"url":"u1","text":"' + PROSE + '"}\n{"url":"u2","text":',
+        encoding="utf-8",
+    )
+    out = tmp_path / "ds"
+    assert main(["build", str(p), "-o", str(out)]) == 0
+    stats = json.loads((out / "stats.json").read_text())["stats"]
+    assert stats["seen"] == 2
+    assert stats["malformed"] == 1
+    assert stats["seen"] == stats["kept"] + stats["dropped"] + stats["malformed"]
+
+
+def test_all_lines_malformed_still_closes(tmp_path):
+    p = tmp_path / "in.jsonl"
+    p.write_text("BROKEN ONE\nBROKEN TWO\nBROKEN THREE\n", encoding="utf-8")
+    out = tmp_path / "ds"
+    assert main(["build", str(p), "-o", str(out)]) == 0
+    stats = json.loads((out / "stats.json").read_text())["stats"]
+    assert stats["seen"] == 3
+    assert stats["malformed"] == 3
+    assert stats["kept"] == 0
+    assert stats["seen"] == stats["kept"] + stats["dropped"] + stats["malformed"]
+    assert (out / "stats.json").exists()
+
+
+def test_stats_json_records_malformed(tmp_path):
+    p = tmp_path / "in.jsonl"
+    p.write_text('{"url":"u1","text":"' + PROSE + '"}\nNOT JSON\n', encoding="utf-8")
+    out = tmp_path / "ds"
+    assert main(["build", str(p), "-o", str(out)]) == 0
+    stats = json.loads((out / "stats.json").read_text())["stats"]
+    assert "malformed" in stats
+
+
+def test_build_strict_exits_nonzero_on_malformed(tmp_path):
+    p = tmp_path / "in.jsonl"
+    p.write_text('{"url":"u1","text":"' + PROSE + '"}\nNOT JSON\n', encoding="utf-8")
+    out = tmp_path / "ds"
+    assert main(["build", str(p), "-o", str(out), "--strict"]) == 1
+    stats = json.loads((out / "stats.json").read_text())["stats"]
+    assert stats["malformed"] == 1
+
+
+def test_build_strict_passes_when_no_malformed(tmp_path):
+    src = write_input(tmp_path, [{"url": "u1", "text": PROSE}])
+    out = tmp_path / "ds"
+    assert main(["build", src, "-o", str(out), "--strict"]) == 0
+    stats = json.loads((out / "stats.json").read_text())["stats"]
+    assert stats["malformed"] == 0
+
+
+def test_build_max_malformed_within_budget_returns_zero(tmp_path):
+    p = tmp_path / "in.jsonl"
+    good = '{"url":"u1","text":"' + PROSE + '"}'
+    p.write_text(good + "\nBAD ONE\n" + good + "\nBAD TWO\n", encoding="utf-8")
+    out = tmp_path / "ds"
+    assert main(["build", str(p), "-o", str(out), "--max-malformed", "5"]) == 0
+    stats = json.loads((out / "stats.json").read_text())["stats"]
+    assert stats["malformed"] == 2
+
+
+def test_build_max_malformed_exceeded_returns_nonzero(tmp_path):
+    p = tmp_path / "in.jsonl"
+    good = '{"url":"u1","text":"' + PROSE + '"}'
+    p.write_text(
+        good + "\nBAD ONE\n" + good + "\nBAD TWO\n" + good + "\nBAD THREE\n",
+        encoding="utf-8",
+    )
+    out = tmp_path / "ds"
+    assert main(["build", str(p), "-o", str(out), "--max-malformed", "2"]) == 1
+    stats = json.loads((out / "stats.json").read_text())["stats"]
+    assert stats["malformed"] == 3
+
+
+def test_build_max_malformed_zero_rejected_by_argparse(tmp_path):
+    src = write_input(tmp_path, [{"url": "u1", "text": PROSE}])
+    out = tmp_path / "ds"
+    with pytest.raises(SystemExit) as exc_info:
+        main(["build", src, "-o", str(out), "--max-malformed", "0"])
+    assert exc_info.value.code == 2
+
+
+def test_build_strict_and_max_malformed_are_mutually_exclusive(tmp_path):
+    src = write_input(tmp_path, [{"url": "u1", "text": PROSE}])
+    out = tmp_path / "ds"
+    with pytest.raises(SystemExit) as exc_info:
+        main(["build", src, "-o", str(out), "--strict", "--max-malformed", "3"])
+    assert exc_info.value.code == 2
+
+
+def test_build_strict_writes_stats_and_manifest_before_failing(tmp_path):
+    p = tmp_path / "in.jsonl"
+    p.write_text('{"url":"u1","text":"' + PROSE + '"}\nNOT JSON\n', encoding="utf-8")
+    out = tmp_path / "ds"
+    assert main(["build", str(p), "-o", str(out), "--strict"]) == 1
+    assert (out / "stats.json").exists()
+    assert (out / "manifest.json").exists()
+
+
+def test_build_strict_all_lines_malformed(tmp_path):
+    p = tmp_path / "in.jsonl"
+    p.write_text("BROKEN ONE\nBROKEN TWO\nBROKEN THREE\n", encoding="utf-8")
+    out = tmp_path / "ds"
+    assert main(["build", str(p), "-o", str(out), "--strict"]) == 1
+    stats = json.loads((out / "stats.json").read_text())["stats"]
+    assert stats["malformed"] == 3
 
 
 def test_assess_command_runs(tmp_path, capsys):
@@ -243,7 +388,6 @@ def test_manifest_json_records_websieve_version(tmp_path):
 
 def test_importing_websieve_survives_missing_distribution_metadata(monkeypatch):
     """A source checkout that was never installed must still import.
-
     `importlib.metadata.version` raises `PackageNotFoundError` when no
     distribution is installed, which happens for a plain clone, a vendored
     copy, or a PYTHONPATH import. Without the guard in `websieve/__init__.py`
@@ -266,3 +410,78 @@ def test_importing_websieve_survives_missing_distribution_metadata(monkeypatch):
         # so the sentinel must not outlive this test.
         monkeypatch.undo()
         importlib.reload(websieve)
+
+
+# --------------------------------------------------------------------------
+# Non-object JSON lines (issue #28)
+#
+# `[1,2,3]`, `"x"`, `42`, `true`, and `null` are all valid JSON and none of
+# them is a record. Before the guard in Document.from_dict they raised
+# AttributeError from inside a comprehension, which _read_docs did not catch,
+# so one bad line from a writer hiccup killed an hours-long run.
+# --------------------------------------------------------------------------
+
+NON_OBJECT_LINES = ["[1,2,3]", '"just a string"', "42", "true", "null"]
+
+
+@pytest.mark.parametrize("bad", NON_OBJECT_LINES)
+def test_a_non_object_line_is_skipped_not_fatal(tmp_path, bad, capsys):
+    src = tmp_path / "shapes.jsonl"
+    src.write_text(f"{json.dumps({'url': 'u1', 'text': PROSE})}\n{bad}\n", encoding="utf-8")
+    out = tmp_path / "out"
+
+    assert main(["build", str(src), "-o", str(out), "--no-compress"]) == 0
+
+    stats = json.loads((out / "stats.json").read_text())["stats"]
+    assert stats["malformed"] == 1
+    assert stats["seen"] == stats["kept"] + stats["dropped"] + stats["malformed"]
+    assert "warning: skipping line 2" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("bad", NON_OBJECT_LINES)
+def test_from_dict_names_what_it_got_instead_of_raising_attributeerror(bad):
+    """The error a caller sees must describe the input, not the implementation.
+
+    `AttributeError: 'list' object has no attribute 'items'` names a detail of
+    the comprehension inside from_dict. It tells someone holding a bad corpus
+    nothing about their corpus, and it changes if from_dict is refactored,
+    which is why _read_docs must not depend on it.
+    """
+    from websieve.models import Document
+
+    with pytest.raises(TypeError, match="expected a JSON object"):
+        Document.from_dict(json.loads(bad))
+
+
+@pytest.mark.parametrize("cmd", ["assess", "dedup"])
+def test_assess_and_dedup_survive_a_non_object_line(tmp_path, cmd):
+    """All three commands share _read_docs, so all three had the crash."""
+    src = tmp_path / "shapes.jsonl"
+    src.write_text(f"{json.dumps({'url': 'u1', 'text': PROSE})}\n[1,2,3]\n", encoding="utf-8")
+    assert main([cmd, str(src)]) == 0
+
+
+def test_every_non_object_shape_counts_toward_malformed(tmp_path):
+    """All five in one file, so the counter cannot be right for one shape and
+    wrong for another."""
+    src = tmp_path / "shapes.jsonl"
+    lines = [json.dumps({"url": "u1", "text": PROSE}), *NON_OBJECT_LINES]
+    src.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    out = tmp_path / "out"
+
+    assert main(["build", str(src), "-o", str(out), "--no-compress"]) == 0
+
+    stats = json.loads((out / "stats.json").read_text())["stats"]
+    assert stats["malformed"] == len(NON_OBJECT_LINES)
+    assert stats["seen"] == stats["kept"] + stats["dropped"] + stats["malformed"]
+
+
+def test_strict_fails_on_a_non_object_line(tmp_path):
+    """The opt-in gate from #23 has to cover this shape too, or a pipeline
+    using --strict still ships a truncated corpus silently."""
+    src = tmp_path / "shapes.jsonl"
+    src.write_text(f"{json.dumps({'url': 'u1', 'text': PROSE})}\n[1,2,3]\n", encoding="utf-8")
+    out = tmp_path / "out"
+
+    assert main(["build", str(src), "-o", str(out), "--no-compress", "--strict"]) == 1
+    assert (out / "stats.json").exists()

@@ -19,7 +19,7 @@ import random
 import sys
 from collections.abc import Iterator
 from pathlib import Path
-from typing import TextIO
+from typing import TYPE_CHECKING, TextIO
 
 from . import __version__
 from .clean.boilerplate import extract
@@ -29,12 +29,15 @@ from .models import Document
 from .pipeline import Pipeline, PipelineConfig, prepare
 from .quality.heuristics import assess
 
+if TYPE_CHECKING:
+    from .pipeline import PipelineStats
+
 
 def _open_input(path: str) -> TextIO:
     return sys.stdin if path == "-" else open(path, encoding="utf-8")
 
 
-def _read_docs(path: str) -> Iterator[Document]:
+def _read_docs(path: str, stats: PipelineStats | None = None) -> Iterator[Document]:
     fh = _open_input(path)
     try:
         for lineno, line in enumerate(fh, 1):
@@ -44,6 +47,9 @@ def _read_docs(path: str) -> Iterator[Document]:
             try:
                 yield Document.from_dict(json.loads(line))
             except (json.JSONDecodeError, TypeError) as exc:
+                if stats is not None:
+                    stats.seen += 1
+                    stats.malformed += 1
                 print(f"warning: skipping line {lineno}: {exc}", file=sys.stderr)
     finally:
         if fh is not sys.stdin:
@@ -86,7 +92,7 @@ def cmd_build(args: argparse.Namespace) -> int:
     with JsonlShardWriter(
         args.output, shard_size=args.shard_size, compress=not args.no_compress
     ) as writer:
-        for doc in pipeline.process(_read_docs(args.input)):
+        for doc in pipeline.process(_read_docs(args.input, pipeline.stats)):
             writer.write(doc.to_dict())
         manifest = writer.close()
 
@@ -102,6 +108,20 @@ def cmd_build(args: argparse.Namespace) -> int:
         f"in {manifest['shard_count']} shard(s) to {args.output}",
         file=sys.stderr,
     )
+    if args.strict and stats.malformed > 0:
+        print(
+            f"error: --strict set but {stats.malformed} malformed line(s) "
+            "encountered; see stats.json",
+            file=sys.stderr,
+        )
+        return 1
+    if args.max_malformed is not None and stats.malformed > args.max_malformed:
+        print(
+            f"error: {stats.malformed} malformed lines exceed --max-malformed "
+            f"{args.max_malformed}; see stats.json",
+            file=sys.stderr,
+        )
+        return 1
     return 0
 
 
@@ -217,6 +237,19 @@ def build_parser() -> argparse.ArgumentParser:
     b.add_argument("--no-quality", action="store_true", help="skip quality filtering")
     b.add_argument("--no-dedup", action="store_true", help="skip near-duplicate removal")
     b.add_argument("--no-compress", action="store_true", help="write plain JSONL")
+    strict_group = b.add_mutually_exclusive_group()
+    strict_group.add_argument(
+        "--strict",
+        action="store_true",
+        help="exit non-zero if any input line failed to parse",
+    )
+    strict_group.add_argument(
+        "--max-malformed",
+        type=_positive_int,
+        metavar="N",
+        default=None,
+        help="exit non-zero if more than N input lines failed to parse",
+    )
     add_dedup_opts(b)
     b.set_defaults(func=cmd_build)
     _add_version(b)

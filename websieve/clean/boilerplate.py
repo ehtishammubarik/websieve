@@ -19,6 +19,7 @@ from __future__ import annotations
 import html
 import re
 from html.parser import HTMLParser
+from statistics import median
 
 # Elements whose contents are never body text.
 _DROP_ELEMENTS = frozenset(
@@ -169,7 +170,15 @@ def _best_run(blocks: list[_Block], scores: list[float]) -> tuple[int, int]:
     """
     if not scores:
         return (0, 0)
-    mean = sum(scores) / len(scores)
+
+    # A single long sidebar or widget must not raise the centering threshold
+    # enough to make every short article paragraph look like a cost. Cap only
+    # its influence on the mean; keep the raw score below so genuinely long
+    # body blocks can still win the run.
+    positive_scores = [score for score in scores if score > 0]
+    score_cap = median(positive_scores) * 4 if positive_scores else 0.0
+    centered_scores = [min(score, score_cap) for score in scores]
+    mean = sum(centered_scores) / len(centered_scores)
     adjusted = [s - mean * 0.5 for s in scores]
 
     best_sum = float("-inf")

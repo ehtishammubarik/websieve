@@ -56,3 +56,34 @@ def test_no_body_content_returns_empty_text():
 def test_inline_tags_do_not_fuse_words():
     text, _ = extract(f"<p>{BODY} <em>emphasis</em> tail continues here.</p>")
     assert "emphasistail" not in text
+
+
+def test_fragmented_short_paragraphs_survive_a_dominant_sidebar():
+    paragraphs = [f"Body segment {index} keeps linked evidence nearby." for index in range(1, 7)]
+    rendered = [
+        paragraph.replace("linked evidence", '<a href="/source">linked evidence</a>')
+        for paragraph in paragraphs
+    ]
+    sidebar = "Unrelated sidebar promotion " * 9
+    page = (
+        "<article>"
+        + "".join(f"<p>{paragraph}</p>" for paragraph in rendered[:3])
+        + f'<div class="sidebar">{sidebar}</div>'
+        + "".join(f"<p>{paragraph}</p>" for paragraph in rendered[3:])
+        + "</article>"
+    )
+
+    text, _ = extract(page)
+
+    assert all(paragraph in text for paragraph in paragraphs)
+
+
+def test_long_unsemantic_link_cloud_stays_outside_body_run():
+    link_cloud = "".join(
+        f'<a href="/related/{index}">Related story {index}</a>' for index in range(12)
+    )
+
+    text, _ = extract(f"<div>{link_cloud}</div><p>{BODY}</p><div>{link_cloud}</div>")
+
+    assert BODY in text
+    assert "Related story" not in text

@@ -108,6 +108,24 @@ def test_stats_serialize():
     json.dumps(d)  # must be serializable
 
 
+def test_progress_callback_receives_kept_and_dropped_updates():
+    p = Pipeline()
+    updates = []
+    docs = [
+        Document(url="u1", text=PROSE),
+        Document(url="u2", text=PROSE),
+        Document(url="u3", text=""),
+    ]
+
+    list(p.process(docs, on_progress=lambda stats: updates.append(stats.to_dict())))
+
+    assert [(row["seen"], row["kept"], row["dropped"]) for row in updates] == [
+        (1, 1, 0),
+        (2, 1, 1),
+        (3, 1, 2),
+    ]
+
+
 def test_stats_arithmetic_includes_malformed():
     # malformed is a peer of dropped, not a sub-bucket, so the totals close:
     # seen == kept + dropped + malformed

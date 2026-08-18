@@ -72,8 +72,12 @@ Full detail, plus what is deliberately **not** planned, in the
   locked-down build box, an air-gapped environment.
 
 If you want a distributed, Spark-scale pipeline with a cluster behind it, use HuggingFace's
-`datatrove`. `websieve` deliberately runs in one process with no dependencies, which is the right
-trade below roughly ten million documents and the wrong one above it.
+`datatrove`. `websieve` deliberately runs in one process with no dependencies. Its
+[reproducible benchmark](docs/benchmarks.md) found that memory is the binding constraint: peak RSS
+grew linearly by about 10.8 MiB per 1,000 input documents because the exact and LSH indexes retain
+keys and signatures for every kept document. On that controlled corpus, the fitted RSS reaches 16
+GiB at roughly 1.5 million inputs—not the previously claimed ten million. Corpus shape and settings
+move that wall, so rerun the benchmark on representative input before sizing a production job.
 
 ## How it works
 
@@ -89,6 +93,21 @@ nine heuristics; nine heuristics beat 128 hash permutations. Details in
 **The core has no dependencies.** Not "few". None. `pyarrow`, `torch`, and `scrapy` are optional
 extras used only by the stages that genuinely need them, and CI fails if a third-party import ever
 reaches the core.
+
+### Measured performance
+
+The committed benchmark uses a checksum-pinned Common Crawl WET record and a deterministic
+1,000-document corpus with known near-duplicate families. On macOS arm64 with CPython 3.12, the
+128-permutation configuration processed 351 documents/s with precision and recall of 1.0. Dropping
+to 64 permutations reached 689 documents/s but recall fell to 0.98 (4 of 200 duplicates missed).
+
+Peak RSS was 42 MiB at 1,000 input documents, 86 MiB at 5,000, and 140 MiB at 10,000; the fitted
+growth is 10.8 MiB per 1,000 inputs. If the process could consume all installed RAM, that implies
+upper bounds of about 1.5 million documents at 16 GiB, 3.0 million at 32 GiB, and 6.1 million at 64
+GiB. Real limits are lower because the operating system needs headroom. These are one-machine,
+controlled-corpus projections—not claims about every crawl. [`docs/benchmarks.md`](docs/benchmarks.md)
+records the exact input hash, hardware, commands, extrapolation table and limits, plus the
+[machine-readable JSON](benchmarks/results/macos-arm64-python312.json).
 
 ## Install
 
@@ -284,7 +303,8 @@ runtime dependency**.
 | Guide | For |
 | :--- | :--- |
 | [Quickstart](docs/quickstart.md) | Five minutes, no crawler needed. Real input and real output |
-| [Architecture](docs/architecture.md) | Why the stages are ordered this way, memory ceiling, limitations |
+| [Architecture](docs/architecture.md) | Why the stages are ordered this way, memory behavior, limitations |
+| [Benchmarks](docs/benchmarks.md) | Reproduce throughput, MinHash accuracy, and peak-memory measurements |
 | [Tuning](docs/tuning.md) | Calibrating thresholds against your own corpus |
 | [Extending](docs/extending.md) | Swapping the extractor, model, writer, or similarity metric |
 | [Roadmap](ROADMAP.md) | The vision, what is next, and what is deliberately not planned. Mapped to [milestones](https://github.com/ehtishammubarik/websieve/milestones) |

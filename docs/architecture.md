@@ -30,13 +30,26 @@ The pipeline is a generator. Memory grows with documents *kept*, not documents
 - `LSHIndex` holds a `num_perm`-length signature per kept document, plus
   `bands` bucket entries pointing at it.
 
-For a 10 million document corpus at `num_perm=128`, the LSH signatures alone
-are roughly 10 GB in CPython, because each signature is a tuple of 128 Python
-ints. That is the practical ceiling for a single process.
+The full retained size is not the digest bytes alone: CPython objects, keys,
+tuples, integers, dictionaries, and bucket lists all add overhead. In the
+[reproducible benchmark](benchmarks.md), fresh processes peaked at 42 MiB for
+1,000 input documents, 86 MiB for 5,000, and 140 MiB for 10,000. Those points
+fit a 31.5 MiB baseline plus 10.8 MiB per 1,000 inputs. Because the exact and LSH
+indexes retain keys and MinHash signatures for every kept document, memory
+growth is linear: the fitted RSS consumes 16 GiB around 1.5 million inputs, 32
+GiB around 3.0 million, and 64 GiB around 6.1 million. Practical ceilings are
+lower because the process cannot safely consume all installed RAM.
 
-Past it, shard by URL host: near-duplicates are overwhelmingly same-host, so
-partitioning by host and deduplicating each partition independently loses very
-little recall and parallelizes cleanly.
+This makes memory the binding constraint before throughput at scale and gives
+concrete motivation to both a [persistent index](https://github.com/ehtishammubarik/websieve/issues/5)
+and [parallel, partitioned processing](https://github.com/ehtishammubarik/websieve/issues/15).
+The fit extrapolates beyond a controlled 1,000–10,000-document range; rerun the
+benchmark at representative document lengths, duplicate rates, and settings
+before sizing a production job.
+
+Partitioning by URL host bounds each in-memory index and parallelizes cleanly,
+but it necessarily misses duplicates copied across hosts. Whether that recall
+trade is acceptable must be measured on the target corpus.
 
 ## Why no dependencies
 
@@ -48,9 +61,12 @@ dependencies are genuinely expensive:
 2. **Air-gapped environments**, where every wheel is a procurement conversation.
 3. **CI**, where a dependency-free core installs in under a second.
 
-The cost is real: a pure-Python MinHash is several times slower than a numpy
-one. That trade is stated rather than hidden, and the optional extras exist for
-callers who would rather have the speed.
+The cost is measured rather than compared to an implementation this repository
+does not ship. On the benchmark's controlled 160-word documents, MinHash
+processed 696 documents/s at 64 permutations, 360 at 128, and 182 at 256.
+Accuracy moved with that cost: 64 permutations missed 4 of 200 known
+duplicates, while 128 and 256 missed none. See [the benchmark](benchmarks.md)
+for the exact source, hardware, and limits.
 
 The CI job that fails on any acquired runtime dependency exists because this
 claim rots the first time someone adds a convenient import, and it would pass

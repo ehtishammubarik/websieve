@@ -509,7 +509,7 @@ def render_markdown(result: dict[str, Any]) -> str:
         "## Reproduce",
         "",
         "```bash",
-        "uv run python benchmarks/benchmark_pipeline.py \\",
+        "python benchmarks/benchmark_pipeline.py \\",
         f"  --stage-documents {config['stage_documents']} --repeats {config['repeats']} \\",
         f"  --permutations {','.join(str(value) for value in config['permutations'])} \\",
         f"  --threshold {config['near_duplicate_threshold']} \\",

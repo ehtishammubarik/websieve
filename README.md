@@ -304,8 +304,10 @@ Maintained by [Ehtisham Mubarik](https://github.com/ehtishammubarik)
 ## Origin
 
 This repository began as a containerized Scrapy deployment (Scrapy, Scrapyd, Postgres, Filebeat,
-Jenkins) built for a Swiss real-estate crawl. That crawler is still here under `immo_crawl/` as a
-working integration example. `websieve` is the part that was missing: everything between a finished
+Jenkins) built for a Swiss real-estate crawl. That crawler is still here under
+[`examples/immo_crawl/`](examples/immo_crawl/) as a working integration example — a complete
+Scrapy/Scrapyd/Postgres deployment, with its own dependencies and its own README, kept out of the
+root so it cannot be mistaken for this package's build configuration. `websieve` is the part that was missing: everything between a finished
 crawl and a dataset you would actually train on.
 
 ## License

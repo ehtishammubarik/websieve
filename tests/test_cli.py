@@ -2,6 +2,7 @@ import importlib.metadata
 import json
 import subprocess
 import sys
+
 import pytest
 
 from websieve import __version__
@@ -238,3 +239,30 @@ def test_manifest_json_records_websieve_version(tmp_path):
     main(["build", src, "-o", str(out)])
     manifest = json.loads((out / "manifest.json").read_text())
     assert manifest["websieve_version"] == __version__
+
+
+def test_importing_websieve_survives_missing_distribution_metadata(monkeypatch):
+    """A source checkout that was never installed must still import.
+
+    `importlib.metadata.version` raises `PackageNotFoundError` when no
+    distribution is installed, which happens for a plain clone, a vendored
+    copy, or a PYTHONPATH import. Without the guard in `websieve/__init__.py`
+    that exception escapes at import time and takes down every module below it,
+    which is a steep price for a version string.
+    """
+    import importlib
+
+    import websieve
+
+    def _raise(_name):
+        raise importlib.metadata.PackageNotFoundError("websieve")
+
+    monkeypatch.setattr(importlib.metadata, "version", _raise)
+    reloaded = importlib.reload(websieve)
+    try:
+        assert reloaded.__version__ == "0+unknown"
+    finally:
+        # Other tests compare __version__ against the real installed metadata,
+        # so the sentinel must not outlive this test.
+        monkeypatch.undo()
+        importlib.reload(websieve)

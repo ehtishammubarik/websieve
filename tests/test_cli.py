@@ -316,3 +316,78 @@ def test_dedup_extracts_html_before_hashing(tmp_path, capsys):
     src = write_input(tmp_path, [HTML_DOC, {"url": "https://example.com/b", "text": plain}])
     main(["dedup", src])
     assert "DUPLICATE_OF" in capsys.readouterr().out
+
+
+# --------------------------------------------------------------------------
+# Non-object JSON lines (issue #28)
+#
+# `[1,2,3]`, `"x"`, `42`, `true`, and `null` are all valid JSON and none of
+# them is a record. Before the guard in Document.from_dict they raised
+# AttributeError from inside a comprehension, which _read_docs did not catch,
+# so one bad line from a writer hiccup killed an hours-long run.
+# --------------------------------------------------------------------------
+
+NON_OBJECT_LINES = ["[1,2,3]", '"just a string"', "42", "true", "null"]
+
+
+@pytest.mark.parametrize("bad", NON_OBJECT_LINES)
+def test_a_non_object_line_is_skipped_not_fatal(tmp_path, bad, capsys):
+    src = tmp_path / "shapes.jsonl"
+    src.write_text(f"{json.dumps({'url': 'u1', 'text': PROSE})}\n{bad}\n", encoding="utf-8")
+    out = tmp_path / "out"
+
+    assert main(["build", str(src), "-o", str(out), "--no-compress"]) == 0
+
+    stats = json.loads((out / "stats.json").read_text())["stats"]
+    assert stats["malformed"] == 1
+    assert stats["seen"] == stats["kept"] + stats["dropped"] + stats["malformed"]
+    assert "warning: skipping line 2" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("bad", NON_OBJECT_LINES)
+def test_from_dict_names_what_it_got_instead_of_raising_attributeerror(bad):
+    """The error a caller sees must describe the input, not the implementation.
+
+    `AttributeError: 'list' object has no attribute 'items'` names a detail of
+    the comprehension inside from_dict. It tells someone holding a bad corpus
+    nothing about their corpus, and it changes if from_dict is refactored,
+    which is why _read_docs must not depend on it.
+    """
+    from websieve.models import Document
+
+    with pytest.raises(TypeError, match="expected a JSON object"):
+        Document.from_dict(json.loads(bad))
+
+
+@pytest.mark.parametrize("cmd", ["assess", "dedup"])
+def test_assess_and_dedup_survive_a_non_object_line(tmp_path, cmd):
+    """All three commands share _read_docs, so all three had the crash."""
+    src = tmp_path / "shapes.jsonl"
+    src.write_text(f"{json.dumps({'url': 'u1', 'text': PROSE})}\n[1,2,3]\n", encoding="utf-8")
+    assert main([cmd, str(src)]) == 0
+
+
+def test_every_non_object_shape_counts_toward_malformed(tmp_path):
+    """All five in one file, so the counter cannot be right for one shape and
+    wrong for another."""
+    src = tmp_path / "shapes.jsonl"
+    lines = [json.dumps({"url": "u1", "text": PROSE}), *NON_OBJECT_LINES]
+    src.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    out = tmp_path / "out"
+
+    assert main(["build", str(src), "-o", str(out), "--no-compress"]) == 0
+
+    stats = json.loads((out / "stats.json").read_text())["stats"]
+    assert stats["malformed"] == len(NON_OBJECT_LINES)
+    assert stats["seen"] == stats["kept"] + stats["dropped"] + stats["malformed"]
+
+
+def test_strict_fails_on_a_non_object_line(tmp_path):
+    """The opt-in gate from #23 has to cover this shape too, or a pipeline
+    using --strict still ships a truncated corpus silently."""
+    src = tmp_path / "shapes.jsonl"
+    src.write_text(f"{json.dumps({'url': 'u1', 'text': PROSE})}\n[1,2,3]\n", encoding="utf-8")
+    out = tmp_path / "out"
+
+    assert main(["build", str(src), "-o", str(out), "--no-compress", "--strict"]) == 1
+    assert (out / "stats.json").exists()

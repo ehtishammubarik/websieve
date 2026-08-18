@@ -41,6 +41,27 @@ about a minute.
 framework does it. The part in between, where a crawl becomes a corpus, is where people quietly lose
 weeks and then train on duplicates anyway.
 
+## What it is trying to be
+
+**A crawl becomes a corpus in one process, on any machine, with every decision
+attributable.**
+
+- **You can always answer "why is this document not in my dataset?"** Every drop
+  is attributed to a rule, every rule reports the value it observed and the
+  threshold it failed, and the counts reconcile: `seen == kept + dropped +
+  malformed`. A filter you cannot attribute is a filter you cannot tune.
+- **It runs where the work is.** The core imports stdlib only, so it works
+  inside someone else's container, on a locked-down build box, or air-gapped.
+  Permanent, and enforced by CI.
+- **It stops where it should.** Below roughly ten million documents, one process
+  with no dependencies is the right trade. Above that it is the wrong one, and
+  the honest answer is HuggingFace's `datatrove`.
+
+Full detail, plus what is deliberately **not** planned, in the
+[roadmap](ROADMAP.md). Work in flight is tracked in the
+[0.2](https://github.com/ehtishammubarik/websieve/milestone/1) and
+[0.3](https://github.com/ehtishammubarik/websieve/milestone/2) milestones.
+
 ## Who this is for
 
 - **You are building an LLM or RAG corpus** from crawled pages and need dedup that catches near
@@ -266,7 +287,7 @@ runtime dependency**.
 | [Architecture](docs/architecture.md) | Why the stages are ordered this way, memory ceiling, limitations |
 | [Tuning](docs/tuning.md) | Calibrating thresholds against your own corpus |
 | [Extending](docs/extending.md) | Swapping the extractor, model, writer, or similarity metric |
-| [Roadmap](ROADMAP.md) | What is next, and what is deliberately not planned |
+| [Roadmap](ROADMAP.md) | The vision, what is next, and what is deliberately not planned. Mapped to [milestones](https://github.com/ehtishammubarik/websieve/milestones) |
 | [Changelog](CHANGELOG.md) | What changed in each release |
 | [Contributing](CONTRIBUTING.md) | Setup, the rules specific to this codebase |
 

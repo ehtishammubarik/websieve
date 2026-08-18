@@ -63,6 +63,7 @@ Shipped, tested, and on PyPI.
 | **Non-object JSON lines warned, not fatal** | `[1,2,3]`, `"x"`, `42`, `true`, `null` ([#33]) |
 | **Fragmented short-body extraction** | dominant sidebars no longer suppress runs of short semantic paragraphs ([#39]) |
 | **Reproducible performance benchmark** | stage throughput, dedup accuracy, and peak RSS with pinned input and machine-readable results ([#38]) |
+| **Live build progress** | stderr-only seen, kept, keep-rate, and throughput counters for unknown-length streams ([#40]) |
 
 ## Next (0.2)
 
@@ -72,7 +73,6 @@ that most affect whether this survives contact with production work.
 | Item | Why it matters |
 | :--- | :--- |
 | [Resumable runs](https://github.com/ehtishammubarik/websieve/issues/2) | A crash 8 hours into a 12-hour job currently means starting over |
-| [Progress reporting](https://github.com/ehtishammubarik/websieve/issues/3) | `build` is silent until it finishes, which is unpleasant at corpus scale and indistinguishable from a hang |
 | [Persistent dedup index](https://github.com/ehtishammubarik/websieve/issues/5) | Deduplicate a second crawl against the first instead of re-reading both |
 | [Release pipeline does not test the artifact](https://github.com/ehtishammubarik/websieve/issues/11) | It tests the source tree, so a packaging break ships |
 | [`websieve report`](https://github.com/ehtishammubarik/websieve/issues/12) | An HTML corpus report you can hand to someone who will not read `stats.json` |
@@ -150,3 +150,4 @@ build it twice.
 [#34]: https://github.com/ehtishammubarik/websieve/issues/34
 [#38]: https://github.com/ehtishammubarik/websieve/pull/38
 [#39]: https://github.com/ehtishammubarik/websieve/pull/39
+[#40]: https://github.com/ehtishammubarik/websieve/pull/40

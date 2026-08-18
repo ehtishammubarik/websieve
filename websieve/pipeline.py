@@ -17,7 +17,7 @@ circuit silently.
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Iterator
+from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
@@ -138,9 +138,23 @@ class Pipeline:
         self._hasher = MinHash(num_perm=self.config.num_perm)
         self._lsh = LSHIndex(num_perm=self.config.num_perm, bands=self.config.bands)
 
-    def process(self, docs: Iterable[Document]) -> Iterator[Document]:
-        """Run every document through the pipeline, yielding survivors."""
+    def process(
+        self,
+        docs: Iterable[Document],
+        *,
+        on_progress: Callable[[PipelineStats], None] | None = None,
+    ) -> Iterator[Document]:
+        """Run every document through the pipeline, yielding survivors.
+
+        ``on_progress`` receives the live counters after each parsed document.
+        The callback decides whether and how to report; the library never prints.
+        """
         cfg = self.config
+
+        def notify() -> None:
+            if on_progress is not None:
+                on_progress(self.stats)
+
         for doc in docs:
             # `seen` is also incremented in the CLI read layer for malformed
             # lines (cli._read_docs); only successfully-parsed Documents reach
@@ -152,11 +166,13 @@ class Pipeline:
 
             if not doc.text:
                 self.stats.dropped_empty += 1
+                notify()
                 continue
 
             is_dup, _first = self._exact.check(doc.doc_id, doc.text)
             if is_dup:
                 self.stats.dropped_exact_dup += 1
+                notify()
                 continue
             doc.signatures = signatures(doc.text)
 
@@ -175,6 +191,7 @@ class Pipeline:
                         self.stats.quality_failures[name] = (
                             self.stats.quality_failures.get(name, 0) + 1
                         )
+                    notify()
                     continue
 
             if cfg.run_near_dedup:
@@ -182,8 +199,10 @@ class Pipeline:
                 matches = self._lsh.duplicates(sig, cfg.near_dup_threshold)
                 if matches:
                     self.stats.dropped_near_dup += 1
+                    notify()
                     continue
                 self._lsh.add(doc.doc_id, sig)
 
             self.stats.kept += 1
+            notify()
             yield doc

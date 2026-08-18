@@ -134,6 +134,15 @@ websieve build crawl.jsonl -o dataset/ --threshold 0.85 --shard-size 50000
 
 You get sharded output, a manifest, and a stats report:
 
+While `build` runs, it reports live counters and throughput to stderr every
+10,000 input records, including malformed records. This keeps piped stdout
+clean and does not need to know the stream's total length. Change the interval
+with `--progress-every N`, or use `--progress-every 0` to disable it.
+
+```text
+  50000 seen     18342 kept (36.7%)   1240 docs/s
+```
+
 ```
 dataset/
   shard-00000.jsonl.gz

@@ -17,7 +17,8 @@ import argparse
 import json
 import random
 import sys
-from collections.abc import Iterator
+import time
+from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import TYPE_CHECKING, TextIO
 
@@ -37,7 +38,11 @@ def _open_input(path: str) -> TextIO:
     return sys.stdin if path == "-" else open(path, encoding="utf-8")
 
 
-def _read_docs(path: str, stats: PipelineStats | None = None) -> Iterator[Document]:
+def _read_docs(
+    path: str,
+    stats: PipelineStats | None = None,
+    on_progress: Callable[[PipelineStats], None] | None = None,
+) -> Iterator[Document]:
     fh = _open_input(path)
     try:
         for lineno, line in enumerate(fh, 1):
@@ -50,6 +55,8 @@ def _read_docs(path: str, stats: PipelineStats | None = None) -> Iterator[Docume
                 if stats is not None:
                     stats.seen += 1
                     stats.malformed += 1
+                    if on_progress is not None:
+                        on_progress(stats)
                 print(f"warning: skipping line {lineno}: {exc}", file=sys.stderr)
     finally:
         if fh is not sys.stdin:
@@ -61,6 +68,47 @@ def _positive_int(value: str) -> int:
     if n < 1:
         raise argparse.ArgumentTypeError("must be at least 1")
     return n
+
+
+def _nonnegative_int(value: str) -> int:
+    n = int(value)
+    if n < 0:
+        raise argparse.ArgumentTypeError("must be at least 0")
+    return n
+
+
+class _ProgressReporter:
+    """Throttle live pipeline counters and render them to a caller-owned stream."""
+
+    def __init__(
+        self,
+        every: int,
+        *,
+        stream: TextIO | None = None,
+        clock: Callable[[], float] = time.monotonic,
+    ) -> None:
+        self.every = every
+        self.stream = stream or sys.stderr
+        self.clock = clock
+        self.started_at = clock()
+        self.last_reported = 0
+
+    def __call__(self, stats: PipelineStats) -> None:
+        if (
+            self.every == 0
+            or stats.seen == 0
+            or stats.seen % self.every
+            or stats.seen == self.last_reported
+        ):
+            return
+        elapsed = max(self.clock() - self.started_at, 1e-9)
+        rate = stats.seen / elapsed
+        print(
+            f"{stats.seen:>7} seen   {stats.kept:>7} kept "
+            f"({stats.keep_rate:.1%})   {rate:.0f} docs/s",
+            file=self.stream,
+        )
+        self.last_reported = stats.seen
 
 
 def _sample_docs(docs: Iterator[Document], n: int, rng: random.Random) -> list[Document]:
@@ -88,11 +136,13 @@ def cmd_build(args: argparse.Namespace) -> int:
         run_near_dedup=not args.no_dedup,
     )
     pipeline = Pipeline(config)
+    progress = _ProgressReporter(args.progress_every)
 
     with JsonlShardWriter(
         args.output, shard_size=args.shard_size, compress=not args.no_compress
     ) as writer:
-        for doc in pipeline.process(_read_docs(args.input, pipeline.stats)):
+        docs = _read_docs(args.input, pipeline.stats, progress)
+        for doc in pipeline.process(docs, on_progress=progress):
             writer.write(doc.to_dict())
         manifest = writer.close()
 
@@ -237,6 +287,13 @@ def build_parser() -> argparse.ArgumentParser:
     b.add_argument("--no-quality", action="store_true", help="skip quality filtering")
     b.add_argument("--no-dedup", action="store_true", help="skip near-duplicate removal")
     b.add_argument("--no-compress", action="store_true", help="write plain JSONL")
+    b.add_argument(
+        "--progress-every",
+        type=_nonnegative_int,
+        metavar="N",
+        default=10_000,
+        help="report progress to stderr every N input records; 0 disables",
+    )
     strict_group = b.add_mutually_exclusive_group()
     strict_group.add_argument(
         "--strict",

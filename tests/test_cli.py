@@ -1,4 +1,5 @@
 import importlib.metadata
+import io
 import json
 import subprocess
 import sys
@@ -6,7 +7,8 @@ import sys
 import pytest
 
 from websieve import __version__
-from websieve.cli import main
+from websieve.cli import _ProgressReporter, main
+from websieve.pipeline import PipelineStats
 
 PROSE = (
     "Kubernetes schedules GPU workloads through the NVIDIA device plugin. "
@@ -45,6 +47,53 @@ def test_build_respects_disabled_stages(tmp_path):
     out = tmp_path / "ds"
     main(["build", src, "-o", str(out), "--no-quality", "--no-dedup"])
     assert json.loads((out / "stats.json").read_text())["stats"]["kept"] == 1
+
+
+def test_build_reports_progress_for_valid_dropped_and_malformed_records(tmp_path, capsys):
+    p = tmp_path / "in.jsonl"
+    good = json.dumps({"url": "u1", "text": PROSE})
+    p.write_text(good + "\nNOT JSON\n" + good + "\n", encoding="utf-8")
+    out = tmp_path / "ds"
+
+    assert main(["build", str(p), "-o", str(out), "--progress-every", "1"]) == 0
+    captured = capsys.readouterr()
+    progress = [line for line in captured.err.splitlines() if line.endswith("docs/s")]
+
+    assert captured.out == ""
+    assert len(progress) == 3
+    assert "1 seen" in progress[0] and "1 kept (100.0%)" in progress[0]
+    assert "2 seen" in progress[1] and "1 kept (50.0%)" in progress[1]
+    assert "3 seen" in progress[2] and "1 kept (33.3%)" in progress[2]
+
+
+def test_build_progress_zero_is_silent(tmp_path, capsys):
+    src = write_input(tmp_path, [{"url": "u1", "text": PROSE}])
+    out = tmp_path / "ds"
+
+    assert main(["build", src, "-o", str(out), "--progress-every", "0"]) == 0
+
+    assert "docs/s" not in capsys.readouterr().err
+
+
+def test_build_rejects_negative_progress_interval(tmp_path):
+    src = write_input(tmp_path, [{"url": "u1", "text": PROSE}])
+    out = tmp_path / "ds"
+
+    with pytest.raises(SystemExit) as exc_info:
+        main(["build", src, "-o", str(out), "--progress-every", "-1"])
+
+    assert exc_info.value.code == 2
+
+
+def test_progress_reporter_uses_elapsed_monotonic_time():
+    ticks = iter([100.0, 102.0])
+    stream = io.StringIO()
+    reporter = _ProgressReporter(10, stream=stream, clock=lambda: next(ticks))
+
+    reporter(PipelineStats(seen=10, kept=4))
+    reporter(PipelineStats(seen=10, kept=4))  # the same milestone is not repeated
+
+    assert stream.getvalue() == "     10 seen         4 kept (40.0%)   5 docs/s\n"
 
 
 def test_malformed_line_is_skipped_not_fatal(tmp_path):
@@ -279,6 +328,31 @@ def test_stdin_input(tmp_path):
     )
     assert r.returncode == 0
     assert json.loads((out / "stats.json").read_text())["stats"]["kept"] == 1
+
+
+def test_stdin_progress_needs_no_known_total(tmp_path):
+    out = tmp_path / "ds"
+    r = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "websieve.cli",
+            "build",
+            "-",
+            "-o",
+            str(out),
+            "--progress-every",
+            "1",
+        ],
+        input=json.dumps({"url": "u1", "text": PROSE}) + "\n",
+        capture_output=True,
+        text=True,
+    )
+
+    assert r.returncode == 0
+    assert r.stdout == ""
+    assert "1 seen" in r.stderr and "1 kept (100.0%)" in r.stderr
+    assert "docs/s" in r.stderr
 
 
 HTML_DOC = {

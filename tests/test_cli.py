@@ -49,6 +49,46 @@ def test_build_respects_disabled_stages(tmp_path):
     assert json.loads((out / "stats.json").read_text())["stats"]["kept"] == 1
 
 
+def test_build_chunks_only_after_document_survives_dedup(tmp_path):
+    text = "# Guide\n\n" + "A useful sentence. " * 12
+    src = write_input(tmp_path, [{"url": "u1", "text": text}, {"url": "u2", "text": text}])
+    out = tmp_path / "ds"
+
+    assert (
+        main(
+            [
+                "build",
+                src,
+                "-o",
+                str(out),
+                "--chunk",
+                "80",
+                "--no-compress",
+                "--no-quality",
+            ]
+        )
+        == 0
+    )
+
+    records = [
+        json.loads(line) for line in next(out.glob("shard-*.jsonl")).read_text().splitlines()
+    ]
+    assert len(records) > 1
+    assert {record["doc_id"] for record in records} == {records[0]["doc_id"]}
+    assert [record["chunk_index"] for record in records] == list(range(len(records)))
+    assert all(record["heading_path"] == ["Guide"] for record in records)
+
+
+def test_build_rejects_overlap_not_smaller_than_chunk(tmp_path, capsys):
+    src = write_input(tmp_path, [{"url": "u1", "text": PROSE}])
+
+    assert (
+        main(["build", src, "-o", str(tmp_path / "ds"), "--chunk", "10", "--chunk-overlap", "10"])
+        == 2
+    )
+    assert "--chunk-overlap must be smaller" in capsys.readouterr().err
+
+
 def test_build_reports_progress_for_valid_dropped_and_malformed_records(tmp_path, capsys):
     p = tmp_path / "in.jsonl"
     good = json.dumps({"url": "u1", "text": PROSE})

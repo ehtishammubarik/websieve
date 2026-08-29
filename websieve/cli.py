@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, TextIO
 
 from . import __version__
+from .chunk import semantic_chunks
 from .clean.boilerplate import extract
 from .dedup.minhash import deduplicate
 from .export.writers import JsonlShardWriter
@@ -127,6 +128,9 @@ def _sample_docs(docs: Iterator[Document], n: int, rng: random.Random) -> list[D
 
 
 def cmd_build(args: argparse.Namespace) -> int:
+    if args.chunk is not None and args.chunk_overlap >= args.chunk:
+        print("error: --chunk-overlap must be smaller than --chunk", file=sys.stderr)
+        return 2
     config = PipelineConfig(
         exact_level=args.exact_level,
         near_dup_threshold=args.threshold,
@@ -143,7 +147,19 @@ def cmd_build(args: argparse.Namespace) -> int:
     ) as writer:
         docs = _read_docs(args.input, pipeline.stats, progress)
         for doc in pipeline.process(docs, on_progress=progress):
-            writer.write(doc.to_dict())
+            if args.chunk is None:
+                writer.write(doc.to_dict())
+                continue
+            for index, chunk in enumerate(
+                semantic_chunks(doc.text, max_chars=args.chunk, overlap=args.chunk_overlap)
+            ):
+                record = doc.to_dict()
+                record.update(
+                    text=chunk.text,
+                    chunk_index=index,
+                    heading_path=list(chunk.heading_path),
+                )
+                writer.write(record)
         manifest = writer.close()
 
     stats = pipeline.stats
@@ -287,6 +303,19 @@ def build_parser() -> argparse.ArgumentParser:
     b.add_argument("--no-quality", action="store_true", help="skip quality filtering")
     b.add_argument("--no-dedup", action="store_true", help="skip near-duplicate removal")
     b.add_argument("--no-compress", action="store_true", help="write plain JSONL")
+    b.add_argument(
+        "--chunk",
+        type=_positive_int,
+        metavar="CHARS",
+        help="split kept documents into semantic chunks of approximately this size",
+    )
+    b.add_argument(
+        "--chunk-overlap",
+        type=_nonnegative_int,
+        default=0,
+        metavar="CHARS",
+        help="repeat up to this much prose between adjacent chunks (default: 0)",
+    )
     b.add_argument(
         "--progress-every",
         type=_nonnegative_int,

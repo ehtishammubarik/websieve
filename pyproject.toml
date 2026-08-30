@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "websieve"
-version = "0.1.1"
+version = "0.1.2"
 description = "Turn a web crawl into an ML-ready dataset: extract, filter, deduplicate, embed, shard."
 readme = "README.md"
 requires-python = ">=3.10"

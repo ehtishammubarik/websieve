@@ -55,3 +55,23 @@ jobs:
       - run: pip install ruff
       - run: ruff check websieve tests
       - run: ruff format --check websieve tests
+
+  roadmap-is-fresh:
+    # ROADMAP.md tells reviewers to block a PR that closes a roadmap item
+    # without moving its row. That rule was broken twice regardless: once by a
+    # PR nobody blocked, and once by an issue closed by hand, where no PR
+    # existed for the rule to bind on. See #44.
+    #
+    # Skips rather than fails when the API will not answer. A fork pull request
+    # carries no token, and a first-time contributor must not see red for a
+    # reason unrelated to their change. A skip is not a pass and the script
+    # says so in its own output.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python .github/scripts/check_roadmap_fresh.py
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

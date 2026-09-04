@@ -132,6 +132,16 @@ Or run against a file:
 websieve build crawl.jsonl -o dataset/ --threshold 0.85 --shard-size 50000
 ```
 
+For RAG output, chunk only after quality filtering and deduplication:
+
+```bash
+websieve build crawl.jsonl -o dataset/ --chunk 512 --chunk-overlap 64
+```
+
+Chunks prefer heading, paragraph, and sentence boundaries, preserve Markdown code fences and
+tables intact, and carry the original `doc_id`, a zero-based `chunk_index`, and `heading_path` for
+citation. Oversized fenced blocks and tables are emitted intact rather than silently split.
+
 You get sharded output, a manifest, and a stats report:
 
 While `build` runs, it reports live counters and throughput to stderr every

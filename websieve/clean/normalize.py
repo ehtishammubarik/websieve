@@ -16,10 +16,10 @@ import unicodedata
 # collapsing and silently break both hashing and token counts.
 _INVISIBLE = re.compile(
     "["
-    "​-‏"  # zero-width space through RTL mark
-    "‪-‮"  # bidi embedding and override
-    "⁠-⁤"  # word joiner, invisible operators
-    "﻿"  # BOM used mid-string
+    "\u200b-\u200f"  # zero-width space through RTL mark
+    "\u202a-\u202e"  # bidi embedding and override
+    "\u2060-\u2064"  # word joiner, invisible operators
+    "\ufeff"  # BOM used mid-string
     "]"
 )
 
@@ -74,10 +74,27 @@ def collapse_whitespace(text: str) -> str:
 
     Paragraph structure is preserved: a single blank line survives, because
     the quality heuristics count lines and paragraphs.
+    Indentation inside fenced code blocks (``` or ~~~) is preserved.
     """
-    text = _HORIZONTAL_WS.sub(" ", text)
-    text = _EXCESS_BLANK_LINES.sub("\n\n", text)
-    return "\n".join(line.strip() for line in text.split("\n")).strip()
+    lines = text.split("\n")
+    processed_lines = []
+    in_code_block = False
+
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith("```") or stripped.startswith("~~~"):
+            in_code_block = not in_code_block
+            processed_lines.append(stripped)
+        elif in_code_block:
+            # Preserve internal indentation, trim trailing whitespace only
+            processed_lines.append(line.rstrip())
+        else:
+            # Normal prose: collapse whitespace runs and strip outer padding
+            collapsed = _HORIZONTAL_WS.sub(" ", stripped)
+            processed_lines.append(collapsed)
+
+    joined = "\n".join(processed_lines)
+    return _EXCESS_BLANK_LINES.sub("\n\n", joined).strip()
 
 
 def normalize(text: str, *, form: str = "NFKC", fold_quotes: bool = True) -> str:

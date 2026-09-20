@@ -64,6 +64,7 @@ Shipped, tested, and on PyPI.
 | **Fragmented short-body extraction** | dominant sidebars no longer suppress runs of short semantic paragraphs ([#39]) |
 | **Reproducible performance benchmark** | stage throughput, dedup accuracy, and peak RSS with pinned input and machine-readable results ([#38]) |
 | **Live build progress** | stderr-only seen, kept, keep-rate, and throughput counters for unknown-length streams ([#40]) |
+| **Semantic chunking for RAG** | `--chunk` splits at headings, paragraphs, and sentence boundaries after dedup, keeping fenced code and tables atomic ([#20], [#41] by @adity982) |
 
 ## Next (0.2)
 
@@ -74,7 +75,6 @@ that most affect whether this survives contact with production work.
 | :--- | :--- |
 | [Resumable runs](https://github.com/ehtishammubarik/websieve/issues/2) | A crash 8 hours into a 12-hour job currently means starting over |
 | [Persistent dedup index](https://github.com/ehtishammubarik/websieve/issues/5) | Deduplicate a second crawl against the first instead of re-reading both |
-| [Release pipeline does not test the artifact](https://github.com/ehtishammubarik/websieve/issues/11) | It tests the source tree, so a packaging break ships |
 | [`websieve report`](https://github.com/ehtishammubarik/websieve/issues/12) | An HTML corpus report you can hand to someone who will not read `stats.json` |
 | [Dataset card](https://github.com/ehtishammubarik/websieve/issues/13) | Publishing a dataset without one is how provenance gets lost |
 | [Official Docker image](https://github.com/ehtishammubarik/websieve/issues/14) | Trying it should take 30 seconds |
@@ -90,7 +90,6 @@ and none of it blocks 0.2.
 | [Parallel processing](https://github.com/ehtishammubarik/websieve/issues/15) | Multiprocessing over shards. Dedup is the hard part, because the index is shared state; likely partition by URL host |
 | [PII detection](https://github.com/ehtishammubarik/websieve/issues/16) | Absent today, and its absence is a compliance trap for anyone publishing a dataset. An optional extra, and never implied without one |
 | [Quality classifier](https://github.com/ehtishammubarik/websieve/issues/22) | An optional learned filter alongside the heuristics, in the style of the FineWeb educational classifier |
-| [Chunking for RAG](https://github.com/ehtishammubarik/websieve/issues/20) | Split at semantic boundaries rather than character counts |
 | [Near-duplicate detection across chunks](https://github.com/ehtishammubarik/websieve/issues/21) | Not just whole documents |
 | [Streaming from S3 and GCS](https://github.com/ehtishammubarik/websieve/issues/7) | Read a crawl without staging it locally |
 | [HuggingFace Hub publishing](https://github.com/ehtishammubarik/websieve/issues/17) | Straight from `build` |
@@ -123,6 +122,18 @@ So: **a PR that closes a roadmap item moves its row into Now, in the same PR.**
 Not afterwards. The row names the PR that delivered it, which is what makes the
 claim checkable rather than assertable. Reviewers, this is fair game to block on.
 
+It then went stale twice more anyway ([#44]): once in a contributor PR that
+closed a roadmap item and was merged without the row moving, and once in an
+issue closed directly, where no PR existed for the rule to bind on. A rule
+enforced only by attention is not enforced.
+
+So CI now checks it. `.github/scripts/check_roadmap_fresh.py` fails when any
+issue linked from **Next** or **Later** is already closed. It skips rather than
+fails when the GitHub API will not answer, because a fork pull request carries
+no token and a first contribution must not go red for a reason that has nothing
+to do with the change. A skip is not a pass, and the script says so in its own
+output.
+
 ## Influencing this list
 
 The order is a guess, and a real use case beats a guess.
@@ -143,6 +154,7 @@ build it twice.
 
 [#10]: https://github.com/ehtishammubarik/websieve/pull/10
 [#19]: https://github.com/ehtishammubarik/websieve/pull/19
+[#20]: https://github.com/ehtishammubarik/websieve/issues/20
 [#27]: https://github.com/ehtishammubarik/websieve/pull/27
 [#31]: https://github.com/ehtishammubarik/websieve/pull/31
 [#32]: https://github.com/ehtishammubarik/websieve/pull/32
@@ -151,3 +163,5 @@ build it twice.
 [#38]: https://github.com/ehtishammubarik/websieve/pull/38
 [#39]: https://github.com/ehtishammubarik/websieve/pull/39
 [#40]: https://github.com/ehtishammubarik/websieve/pull/40
+[#41]: https://github.com/ehtishammubarik/websieve/pull/41
+[#44]: https://github.com/ehtishammubarik/websieve/issues/44

@@ -126,6 +126,11 @@ Pipe a crawl straight in:
 scrapy crawl myspider -o - -t jsonlines | websieve build - -o dataset/
 ```
 
+For a real, runnable version of exactly that, see the
+[`examples/scrapy_to_corpus/`](examples/scrapy_to_corpus/README.md) worked example: a small Scrapy
+spider crawling local fixture pages, piped into `websieve build`, with the `stats.json` drop
+breakdown explained.
+
 Or run against a file:
 
 ```bash

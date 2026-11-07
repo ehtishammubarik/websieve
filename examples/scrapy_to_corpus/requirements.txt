@@ -1,0 +1,2 @@
+Scrapy>=2.11
+websieve>=0.1.0

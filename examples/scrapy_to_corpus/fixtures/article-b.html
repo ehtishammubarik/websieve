@@ -1,0 +1,10 @@
+<!DOCTYPE html>
+<html>
+<head><title>GPU scheduling on Kubernetes</title></head>
+<body>
+<article>
+  <h1>GPU scheduling</h1>
+  <p>Kubernetes exposes GPUs through the NVIDIA device plugin, which advertises nvidia.com/gpu as an allocatable resource on every node in the pool. Once training and inference share the same hardware, fragmentation becomes the dominant concern: a node with three free GPUs cannot serve a job that wants four. MIG partitioning changes the shape of that problem by splitting a single A100 into as many as seven independent instances, which suits small inference models far better than whole-card allocation does. The trade is that MIG slices are fixed at configuration time, so a cluster tuned for inference will schedule training jobs badly.</p>
+</article>
+</body>
+</html>
